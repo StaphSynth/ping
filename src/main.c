@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <poll.h>
+#include <SDL2/SDL.h>
 
 typedef int bool;
 #define true 1
@@ -192,18 +193,45 @@ void run_client() {
         return;
     }
 
-    const char *message = "Hello, Echo Server!";
-    printf("Sending to server: %s\n", message);
-    write(sock_fd, message, strlen(message));
+    SDL_Init(SDL_INIT_VIDEO);
 
-    char buf[1024];
-    int n = read(sock_fd, buf, sizeof(buf) - 1);
-    if (n > 0) {
-        buf[n] = '\0';
-        printf("Received from server: %s\n", buf);
+    SDL_Window *window = SDL_CreateWindow(
+        "SDL Rectangle",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        1024, 768,
+        SDL_WINDOW_SHOWN
+    );
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    while (1) {
+        GameStateMessage message;
+        int bytes_read = read(sock_fd, &message, sizeof(message));
+
+        if (bytes_read < 0) {
+            perror("Failed to read game state");
+            return;
+        }
+
+        uint32_t ball_x = ntohl(message.ball_x);
+        uint32_t ball_y = ntohl(message.ball_y);
+
+        // Clear to black
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+
+        // Draw a filled red rectangle
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_Rect rect = { ball_x, ball_y, 5, 5 };  // x, y, w, h
+        SDL_RenderFillRect(renderer, &rect);
+
+        SDL_RenderPresent(renderer);
+
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) exit(0);
+        }
     }
-
-    close(sock_fd);
 }
 
 int main(int argc, char *argv[]) {
