@@ -5,21 +5,81 @@
 #include <string.h>
 #include <poll.h>
 
-void run_server() {
-    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+typedef int bool;
+#define true 1
+#define false 0
 
-    struct sockaddr_in addr = {
+typedef struct sockaddr_in sockaddr_in;
+typedef struct sockaddr sockaddr;
+
+typedef struct {
+    bool ok;
+    int sockets[2];
+} WaitResult;
+
+WaitResult wait_for_players() {
+    WaitResult result = (WaitResult){ false };
+
+    int listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_socket < 0) {
+        printf("Failed to create socket\n");
+        return result;
+    }
+
+    int yes = 1;
+    setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+
+    sockaddr_in addr = {
         .sin_family = AF_INET,
         .sin_port = htons(1982),
         .sin_addr.s_addr = INADDR_ANY
     };
 
-    bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr));
-    listen(listen_fd, 1);
+    if (bind(listen_socket, (sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(listen_socket);
+        printf("Failed to bind socket\n");
+        return result;
+    }
 
+    if (listen(listen_socket, 1) < 0) {
+        close(listen_socket);
+        printf("Failed to listen on socket\n");
+        return result;
+    }  
+
+    for (int i = 0; i < 2; i++) {
+        result.sockets[i] = accept(listen_socket, NULL, NULL);
+        if (result.sockets[i] < 0) {
+            close(listen_socket);
+            printf("Failed to accept connection\n");
+            return result;
+        }
+    }
+
+    result.ok = true;
+    close(listen_socket);
+    return result;
+}
+
+void play_game(int *sockets) {
+    
+}
+
+void run_server() {
+    WaitResult result = wait_for_players();
+    if (!result.ok) {
+        fprintf(stderr, "Womp, womp...\n");
+        return;
+    }
+
+    play_game(result.sockets);
+}
+
+
+/*
     // loop polling for incoming connections
-    struct pollfd sockets[10];
-    sockets[0].fd = listen_fd;
+    struct pollfd sockets[3];
+    sockets[0].fd = listen_socket;
     sockets[0].events = POLLIN;
 
     int new_conn = 0;
@@ -50,12 +110,14 @@ void run_server() {
                 int n = read(sockets[i].fd, buf, sizeof(buf));
 
                 if (n > 0) {
-                    printf("Received from client: %.*s\n", n, buf);
+                    // printf("Received from client: %.*s\n", n, buf);
+                    for (int send_conn = 1; send_conn <= num_connections; send_conn++) {
+                        write(sockets[send_conn].fd, buf, n);
+                    }
                 }
             }
         }
-    }
-}
+    }*/
 
 void run_client() {
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
