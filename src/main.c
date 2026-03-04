@@ -12,6 +12,9 @@ typedef int bool;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct sockaddr sockaddr;
 
+static const int BALL_SPEED_X = 5;
+static const int BALL_SPEED_Y = 5;
+
 typedef struct {
     bool ok;
     int sockets[2];
@@ -45,7 +48,7 @@ WaitResult wait_for_players() {
         close(listen_socket);
         printf("Failed to listen on socket\n");
         return result;
-    }  
+    }
 
     for (int i = 0; i < 2; i++) {
         result.sockets[i] = accept(listen_socket, NULL, NULL);
@@ -61,8 +64,63 @@ WaitResult wait_for_players() {
     return result;
 }
 
+typedef struct {
+  uint32_t ball_x;
+  uint32_t ball_y;
+  int32_t ball_velocity_x;
+  int32_t ball_velocity_y;
+  uint32_t paddle1_y;
+  uint32_t paddle2_y;
+} GameState;
+
+typedef struct {
+    uint32_t ball_x;
+    uint32_t ball_y;
+} GameStateMessage;
+
+GameState init_game_state() {
+    GameState state;
+    state.ball_x = 40;
+    state.ball_y = 12;
+    state.ball_velocity_x = BALL_SPEED_X;
+    state.ball_velocity_y = BALL_SPEED_Y;
+    state.paddle1_y = 10;
+    state.paddle2_y = 10;
+
+    return state;
+}
+
+
+
 void play_game(int *sockets) {
-    
+    GameState state = init_game_state();
+    GameStateMessage message;
+
+    // loop to send game state to clients and read updates from them
+    while (1) {
+        //// Game logic update
+        state.ball_x += state.ball_velocity_x;
+        state.ball_y += state.ball_velocity_y;
+
+        //// send game state to clients
+
+        // update message
+        message.ball_x = htonl(state.ball_x);
+        message.ball_y = htonl(state.ball_y);
+
+        // send message to clients
+        for (int i = 0; i < 2; i++) {
+            int bytes_written = write(sockets[i], &message, sizeof(message));
+
+            if (bytes_written < 0) {
+                perror("Failed to send game state");
+                return;
+            }
+        }
+
+        //// sleep
+        usleep(100000); // sleep for 100ms
+    }
 }
 
 void run_server() {
