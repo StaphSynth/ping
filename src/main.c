@@ -114,7 +114,7 @@ void play_game(int *sockets) {
             int bytes_written = write(sockets[i], &message, sizeof(message));
 
             if (bytes_written < 0) {
-                perror("Failed to send game state");
+                printf("Write failed, exiting.\n");
                 return;
             }
         }
@@ -125,6 +125,8 @@ void play_game(int *sockets) {
 }
 
 void run_server() {
+    signal( SIGPIPE, SIG_IGN ); // ignore SIGPIPE to prevent crashing when writing to a closed socket
+
     WaitResult result = wait_for_players();
     if (!result.ok) {
         fprintf(stderr, "Womp, womp...\n");
