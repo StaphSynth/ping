@@ -69,17 +69,19 @@ WaitResult wait_for_players() {
 }
 
 typedef struct {
-  int32_t ball_x;
-  int32_t ball_y;
-  int32_t ball_velocity_x;
-  int32_t ball_velocity_y;
-  int32_t paddle1_y;
-  int32_t paddle2_y;
+    int32_t ball_x;
+    int32_t ball_y;
+    int32_t ball_velocity_x;
+    int32_t ball_velocity_y;
+    int32_t paddle1_y;
+    int32_t paddle2_y;
 } GameState;
 
 typedef struct {
     int32_t ball_x;
     int32_t ball_y;
+    int32_t paddle1_y;
+    int32_t paddle2_y;
 } GameStateMessage;
 
 GameState init_game_state() {
@@ -127,6 +129,8 @@ void play_game(int *sockets) {
         // update message
         message.ball_x = htonl(state.ball_x);
         message.ball_y = htonl(state.ball_y);
+        message.paddle1_y = htonl(state.paddle1_y);
+        message.paddle2_y = htonl(state.paddle2_y);
 
         // send message to clients
         for (int i = 0; i < 2; i++) {
@@ -236,15 +240,24 @@ void run_client() {
 
         uint32_t ball_x = ntohl(message.ball_x);
         uint32_t ball_y = ntohl(message.ball_y);
+        uint32_t paddle1_y = ntohl(message.paddle1_y);
+        uint32_t paddle2_y = ntohl(message.paddle2_y);
 
         // Clear to black
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        // Draw a filled red rectangle
+        // Draw a filled red rectangle for the ball.
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_Rect rect = { ball_x, ball_y, BALL_SIZE, BALL_SIZE };  // x, y, w, h
         SDL_RenderFillRect(renderer, &rect);
+
+        // Draw each paddle.
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect paddle1 = { 10, paddle1_y, 10, 60 };  // x, y, w, h
+        SDL_Rect paddle2 = { WINDOW_WIDTH - 20, paddle2_y, 10, 60 };  // x, y, w, h
+        SDL_RenderFillRect(renderer, &paddle1);
+        SDL_RenderFillRect(renderer, &paddle2);
 
         SDL_RenderPresent(renderer);
 
