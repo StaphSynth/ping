@@ -15,6 +15,9 @@ typedef struct sockaddr sockaddr;
 
 static const int BALL_SPEED_X = 5;
 static const int BALL_SPEED_Y = 5;
+static const int BALL_SIZE = 10;
+static const int WINDOW_WIDTH = 512;
+static const int WINDOW_HEIGHT = 384;
 
 typedef struct {
     bool ok;
@@ -66,17 +69,17 @@ WaitResult wait_for_players() {
 }
 
 typedef struct {
-  uint32_t ball_x;
-  uint32_t ball_y;
+  int32_t ball_x;
+  int32_t ball_y;
   int32_t ball_velocity_x;
   int32_t ball_velocity_y;
-  uint32_t paddle1_y;
-  uint32_t paddle2_y;
+  int32_t paddle1_y;
+  int32_t paddle2_y;
 } GameState;
 
 typedef struct {
-    uint32_t ball_x;
-    uint32_t ball_y;
+    int32_t ball_x;
+    int32_t ball_y;
 } GameStateMessage;
 
 GameState init_game_state() {
@@ -103,6 +106,22 @@ void play_game(int *sockets) {
         state.ball_x += state.ball_velocity_x;
         state.ball_y += state.ball_velocity_y;
 
+        if (state.ball_x <= 0) {
+            state.ball_x = 0;
+            state.ball_velocity_x = -state.ball_velocity_x;
+        } else if (state.ball_x >= WINDOW_WIDTH - BALL_SIZE) {
+            state.ball_x = WINDOW_WIDTH - BALL_SIZE;
+            state.ball_velocity_x = -state.ball_velocity_x;
+        }
+
+        if (state.ball_y <= 0) {
+            state.ball_y = 0;
+            state.ball_velocity_y = -state.ball_velocity_y;
+        } else if (state.ball_y >= WINDOW_HEIGHT - BALL_SIZE) {
+            state.ball_y = WINDOW_HEIGHT - BALL_SIZE;
+            state.ball_velocity_y = -state.ball_velocity_y;
+        }
+
         //// send game state to clients
 
         // update message
@@ -120,7 +139,7 @@ void play_game(int *sockets) {
         }
 
         //// sleep
-        usleep(100000); // sleep for 100ms
+        usleep(50000); // sleep for 50ms
     }
 }
 
@@ -200,7 +219,7 @@ void run_client() {
     SDL_Window *window = SDL_CreateWindow(
         "SDL Rectangle",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1024, 768,
+        WINDOW_WIDTH, WINDOW_HEIGHT,
         SDL_WINDOW_SHOWN
     );
 
@@ -224,7 +243,7 @@ void run_client() {
 
         // Draw a filled red rectangle
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_Rect rect = { ball_x, ball_y, 5, 5 };  // x, y, w, h
+        SDL_Rect rect = { ball_x, ball_y, BALL_SIZE, BALL_SIZE };  // x, y, w, h
         SDL_RenderFillRect(renderer, &rect);
 
         SDL_RenderPresent(renderer);
