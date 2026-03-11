@@ -73,15 +73,14 @@ typedef struct {
     int32_t ball_y;
     int32_t ball_velocity_x;
     int32_t ball_velocity_y;
-    int32_t paddle1_y;
-    int32_t paddle2_y;
+    int32_t paddle_y[2];
 } GameState;
 
 typedef struct {
     int32_t ball_x;
     int32_t ball_y;
-    int32_t paddle1_y;
-    int32_t paddle2_y;
+    int32_t paddle_y[2];
+    int32_t paddle_id;
 } GameStateMessage;
 
 GameState init_game_state() {
@@ -90,8 +89,8 @@ GameState init_game_state() {
     state.ball_y = 12;
     state.ball_velocity_x = BALL_SPEED_X;
     state.ball_velocity_y = BALL_SPEED_Y;
-    state.paddle1_y = 10;
-    state.paddle2_y = 10;
+    state.paddle_y[0] = 10;
+    state.paddle_y[1] = 10;
 
     return state;
 }
@@ -129,11 +128,12 @@ void play_game(int *sockets) {
         // update message
         message.ball_x = htonl(state.ball_x);
         message.ball_y = htonl(state.ball_y);
-        message.paddle1_y = htonl(state.paddle1_y);
-        message.paddle2_y = htonl(state.paddle2_y);
+        message.paddle_y[0] = htonl(state.paddle_y[0]);
+        message.paddle_y[1] = htonl(state.paddle_y[1]);
 
         // send message to clients
         for (int i = 0; i < 2; i++) {
+            message.paddle_id = htonl(i);
             int bytes_written = write(sockets[i], &message, sizeof(message));
 
             if (bytes_written < 0) {
@@ -144,6 +144,21 @@ void play_game(int *sockets) {
 
         //// sleep
         usleep(50000); // sleep for 50ms
+
+        //// Read client updates
+        for (int i = 0; i < 2; i++)
+        {
+            uint32_t paddle_y_update;
+            size_t bytes_read = read(sockets[i], &paddle_y_update, sizeof(paddle_y_update));
+
+            if (bytes_read < sizeof(paddle_y_update))
+            {
+                printf("Read failed, exiting.\n");
+                return;
+            }
+
+            state.paddle_y[i] = ntohl(paddle_y_update);
+        }
     }
 }
 
@@ -159,51 +174,8 @@ void run_server() {
     play_game(result.sockets);
 }
 
-
-/*
-    // loop polling for incoming connections
-    struct pollfd sockets[3];
-    sockets[0].fd = listen_socket;
-    sockets[0].events = POLLIN;
-
-    int new_conn = 0;
-    int poll_result = 0;
-    int num_connections = 0;
-
-    while (1) {
-        poll_result = poll(sockets, 1 + num_connections, -1);
-        if (poll_result < 0) {
-            perror("Poll failed");
-            return;
-        }
-
-        if (sockets[0].revents & POLLIN) {
-            // get the connection and update the meta
-            new_conn = accept(listen_fd, NULL, NULL);
-            num_connections++;
-
-            // add the new connection to the poll list
-            sockets[num_connections].fd = new_conn;
-            sockets[num_connections].events = POLLIN;
-        }
-
-        // walk through list of connections and check if any of them has data to read
-        for (int i = 1; i <= num_connections; i++) {
-            if (sockets[i].revents & POLLIN) {
-                char buf[1024];
-                int n = read(sockets[i].fd, buf, sizeof(buf));
-
-                if (n > 0) {
-                    // printf("Received from client: %.*s\n", n, buf);
-                    for (int send_conn = 1; send_conn <= num_connections; send_conn++) {
-                        write(sockets[send_conn].fd, buf, n);
-                    }
-                }
-            }
-        }
-    }*/
-
 void run_client() {
+
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     struct sockaddr_in addr = {
@@ -229,6 +201,8 @@ void run_client() {
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
+    int paddle_y_velocity = 0;
+
     while (1) {
         GameStateMessage message;
         int bytes_read = read(sock_fd, &message, sizeof(message));
@@ -240,8 +214,10 @@ void run_client() {
 
         uint32_t ball_x = ntohl(message.ball_x);
         uint32_t ball_y = ntohl(message.ball_y);
-        uint32_t paddle1_y = ntohl(message.paddle1_y);
-        uint32_t paddle2_y = ntohl(message.paddle2_y);
+        uint32_t paddle_y[2];
+        uint32_t paddle_id = ntohl(message.paddle_id);
+        paddle_y[0] = ntohl(message.paddle_y[0]);
+        paddle_y[1] = ntohl(message.paddle_y[1]);
 
         // Clear to black
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -254,8 +230,8 @@ void run_client() {
 
         // Draw each paddle.
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect paddle1 = { 10, paddle1_y, 10, 60 };  // x, y, w, h
-        SDL_Rect paddle2 = { WINDOW_WIDTH - 20, paddle2_y, 10, 60 };  // x, y, w, h
+        SDL_Rect paddle1 = { 10, paddle_y[0], 10, 60 };  // x, y, w, h
+        SDL_Rect paddle2 = { WINDOW_WIDTH - 20, paddle_y[1], 10, 60 };  // x, y, w, h
         SDL_RenderFillRect(renderer, &paddle1);
         SDL_RenderFillRect(renderer, &paddle2);
 
@@ -264,6 +240,30 @@ void run_client() {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) exit(0);
+
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_UP) {
+                    paddle_y_velocity = -10;
+                } else if (e.key.keysym.sym == SDLK_DOWN) {
+                    paddle_y_velocity = 10;
+                }
+            }
+
+            if (e.type == SDL_KEYUP) {
+                if (e.key.keysym.sym == SDLK_UP || e.key.keysym.sym == SDLK_DOWN) {
+                    paddle_y_velocity = 0;
+                }
+            }
+
+        }
+
+        // send paddle update to server
+        int32_t paddle_y_update = paddle_y[paddle_id] + paddle_y_velocity;
+        paddle_y_update = htonl(paddle_y_update);
+        int bytes_written = write(sock_fd, &paddle_y_update, sizeof(paddle_y_update));
+        if (bytes_written < 0) {
+            perror("Failed to send paddle update");
+            return;
         }
     }
 }
