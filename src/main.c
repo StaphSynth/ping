@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <poll.h>
 #include <SDL2/SDL.h>
@@ -246,14 +247,14 @@ void draw_text(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, 
     SDL_DestroyTexture(texture);
 }
 
-void run_client() {
+void run_client(uint32_t ip_address) {
 
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
         .sin_port = htons(1982),
-        .sin_addr.s_addr = htonl(0x7F000001)
+        .sin_addr.s_addr = ip_address
     };
 
     int result = connect(sock_fd, (struct sockaddr *)&addr, sizeof(addr));
@@ -359,7 +360,19 @@ int main(int argc, char *argv[]) {
             run_server();
             return 0;
         } else if (strcmp(argv[1], "client") == 0) {
-            run_client();
+            const char* ip_address = "127.0.0.1";
+            if (argc > 2) {
+                ip_address = argv[2];
+            }
+
+            // Try to parse IP address into uint32_t.
+            uint32_t ip_addr_int = inet_addr(ip_address);
+            if (ip_addr_int == INADDR_NONE) {
+                fprintf(stderr, "Invalid IP address: %s\n", ip_address);
+                return 1;
+            }
+
+            run_client(ip_addr_int);
             return 0;
         }
     }
