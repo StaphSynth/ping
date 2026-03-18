@@ -5,6 +5,7 @@
 #include <string.h>
 #include <poll.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 typedef int bool;
 #define true 1
@@ -220,6 +221,16 @@ void run_server() {
     play_game(result.sockets);
 }
 
+void draw_text(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, int y) {
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Surface *surface = TTF_RenderText_Solid(font, text, white);
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_Rect dest_rect = { x, y, surface->w, surface->h };
+    SDL_RenderCopy(renderer, texture, NULL, &dest_rect);
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
+}
+
 void run_client() {
 
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -237,6 +248,9 @@ void run_client() {
     }
 
     SDL_Init(SDL_INIT_VIDEO);
+
+    TTF_Init();
+    TTF_Font *font = TTF_OpenFont("./font.ttf", 24);
 
     SDL_Window *window = SDL_CreateWindow(
         "SDL Rectangle",
@@ -264,6 +278,9 @@ void run_client() {
         uint32_t paddle_id = ntohl(message.paddle_id);
         paddle_y[0] = ntohl(message.paddle_y[0]);
         paddle_y[1] = ntohl(message.paddle_y[1]);
+        uint32_t scores[2];
+        scores[0] = ntohl(message.scores[0]);
+        scores[1] = ntohl(message.scores[1]);
 
         // Clear to black
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -280,6 +297,13 @@ void run_client() {
         SDL_Rect paddle_1 = { WINDOW_WIDTH - GUTTER_WIDTH - PADDLE_WIDTH, paddle_y[1], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
         SDL_RenderFillRect(renderer, &paddle_0);
         SDL_RenderFillRect(renderer, &paddle_1);
+
+        // Draw scores
+        for (int i = 0; i < 2; i++) {
+            char score_text[16];
+            snprintf(score_text, sizeof(score_text), " %d", scores[i]);
+            draw_text(renderer, font, score_text, i == 0 ? 20 : WINDOW_WIDTH - 50, 20);
+        }
 
         SDL_RenderPresent(renderer);
 
