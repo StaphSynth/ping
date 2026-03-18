@@ -77,6 +77,7 @@ typedef struct {
     int32_t ball_velocity_x;
     int32_t ball_velocity_y;
     int32_t paddle_y[2];
+    int32_t scores[2];
 } GameState;
 
 typedef struct {
@@ -84,6 +85,7 @@ typedef struct {
     int32_t ball_y;
     int32_t paddle_y[2];
     int32_t paddle_id;
+    int32_t scores[2];
 } GameStateMessage;
 
 GameState init_game_state() {
@@ -94,11 +96,64 @@ GameState init_game_state() {
     state.ball_velocity_y = BALL_SPEED_Y;
     state.paddle_y[0] = 10;
     state.paddle_y[1] = 10;
+    state.scores[0] = 0;
+    state.scores[1] = 0;
 
     return state;
 }
 
+bool collision_with_left_wall(GameState *state) {
+    return state->ball_x <= 0;
+}
 
+bool collision_with_right_wall(GameState *state) {
+    return state->ball_x >= WINDOW_WIDTH - BALL_SIZE;
+}
+
+bool collision_with_y_wall(GameState *state) {
+    return state->ball_y <= 0 || state->ball_y >= WINDOW_HEIGHT - BALL_SIZE;
+}
+
+int32_t clamp(int32_t value, int32_t min, int32_t max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+}
+
+void reset_ball(GameState *state) {
+    state->ball_x = WINDOW_WIDTH / 2 - BALL_SIZE / 2;
+    state->ball_y = WINDOW_HEIGHT / 2 - BALL_SIZE / 2;
+    state->ball_velocity_x = -state->ball_velocity_x; // send ball towards the player who just scored
+    state->ball_velocity_y = BALL_SPEED_Y; // reset vertical speed
+}
+
+bool collision_with_paddle(GameState *state, int paddle_id) {
+    int paddle_x = (paddle_id == 0) ? GUTTER_WIDTH : (WINDOW_WIDTH - GUTTER_WIDTH - PADDLE_WIDTH);
+    int paddle_y = state->paddle_y[paddle_id];
+
+    return state->ball_x < paddle_x + PADDLE_WIDTH &&
+           state->ball_x + BALL_SIZE > paddle_x &&
+           state->ball_y < paddle_y + PADDLE_HEIGHT &&
+           state->ball_y + BALL_SIZE > paddle_y;
+}
+
+void handle_collisions(GameState *state) {
+    if (collision_with_left_wall(state)){
+        // reset ball to center
+        reset_ball(state);
+        state->scores[1]++; // update score
+    }
+    else if (collision_with_right_wall(state)){
+        // reset ball to center
+        reset_ball(state);
+        state->scores[0]++;
+    }
+
+    if (collision_with_y_wall(state)) {
+        state->ball_y = clamp(state->ball_y, 0, WINDOW_HEIGHT - BALL_SIZE);
+        state->ball_velocity_y = -state->ball_velocity_y;
+    }
+}
 
 void play_game(int *sockets) {
     GameState state = init_game_state();
@@ -110,21 +165,7 @@ void play_game(int *sockets) {
         state.ball_x += state.ball_velocity_x;
         state.ball_y += state.ball_velocity_y;
 
-        if (state.ball_x <= 0) {
-            state.ball_x = 0;
-            state.ball_velocity_x = -state.ball_velocity_x;
-        } else if (state.ball_x >= WINDOW_WIDTH - BALL_SIZE) {
-            state.ball_x = WINDOW_WIDTH - BALL_SIZE;
-            state.ball_velocity_x = -state.ball_velocity_x;
-        }
-
-        if (state.ball_y <= 0) {
-            state.ball_y = 0;
-            state.ball_velocity_y = -state.ball_velocity_y;
-        } else if (state.ball_y >= WINDOW_HEIGHT - BALL_SIZE) {
-            state.ball_y = WINDOW_HEIGHT - BALL_SIZE;
-            state.ball_velocity_y = -state.ball_velocity_y;
-        }
+        handle_collisions(&state);
 
         //// send game state to clients
 
@@ -133,6 +174,8 @@ void play_game(int *sockets) {
         message.ball_y = htonl(state.ball_y);
         message.paddle_y[0] = htonl(state.paddle_y[0]);
         message.paddle_y[1] = htonl(state.paddle_y[1]);
+        message.scores[0] = htonl(state.scores[0]);
+        message.scores[1] = htonl(state.scores[1]);
 
         // send message to clients
         for (int i = 0; i < 2; i++) {
@@ -233,10 +276,10 @@ void run_client() {
 
         // Draw each paddle.
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect paddle1 = { GUTTER_WIDTH, paddle_y[0], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
-        SDL_Rect paddle2 = { WINDOW_WIDTH - GUTTER_WIDTH - PADDLE_WIDTH, paddle_y[1], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
-        SDL_RenderFillRect(renderer, &paddle1);
-        SDL_RenderFillRect(renderer, &paddle2);
+        SDL_Rect paddle_0 = { GUTTER_WIDTH, paddle_y[0], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
+        SDL_Rect paddle_1 = { WINDOW_WIDTH - GUTTER_WIDTH - PADDLE_WIDTH, paddle_y[1], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
+        SDL_RenderFillRect(renderer, &paddle_0);
+        SDL_RenderFillRect(renderer, &paddle_1);
 
         SDL_RenderPresent(renderer);
 
