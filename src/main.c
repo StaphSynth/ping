@@ -18,6 +18,9 @@ static const int BALL_SPEED_Y = 5;
 static const int BALL_SIZE = 10;
 static const int WINDOW_WIDTH = 512;
 static const int WINDOW_HEIGHT = 384;
+static const int GUTTER_WIDTH = 10;
+static const int PADDLE_WIDTH = 10;
+static const int PADDLE_HEIGHT = 60;
 
 typedef struct {
     bool ok;
@@ -230,8 +233,8 @@ void run_client() {
 
         // Draw each paddle.
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect paddle1 = { 10, paddle_y[0], 10, 60 };  // x, y, w, h
-        SDL_Rect paddle2 = { WINDOW_WIDTH - 20, paddle_y[1], 10, 60 };  // x, y, w, h
+        SDL_Rect paddle1 = { GUTTER_WIDTH, paddle_y[0], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
+        SDL_Rect paddle2 = { WINDOW_WIDTH - GUTTER_WIDTH - PADDLE_WIDTH, paddle_y[1], PADDLE_WIDTH, PADDLE_HEIGHT };  // x, y, w, h
         SDL_RenderFillRect(renderer, &paddle1);
         SDL_RenderFillRect(renderer, &paddle2);
 
