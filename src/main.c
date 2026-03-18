@@ -14,8 +14,8 @@ typedef int bool;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct sockaddr sockaddr;
 
-static const int BALL_SPEED_X = 5;
-static const int BALL_SPEED_Y = 5;
+static const int BALL_SPEED_X = 10;
+static const int BALL_SPEED_Y = 10;
 static const int BALL_SIZE = 10;
 static const int WINDOW_WIDTH = 512;
 static const int WINDOW_HEIGHT = 384;
@@ -132,6 +132,9 @@ bool collision_with_paddle(GameState *state, int paddle_id) {
     int paddle_x = (paddle_id == 0) ? GUTTER_WIDTH : (WINDOW_WIDTH - GUTTER_WIDTH - PADDLE_WIDTH);
     int paddle_y = state->paddle_y[paddle_id];
 
+    if (paddle_id == 0 && state->ball_velocity_x > 0) return false;
+    if (paddle_id == 1 && state->ball_velocity_x < 0) return false;
+
     return state->ball_x < paddle_x + PADDLE_WIDTH &&
            state->ball_x + BALL_SIZE > paddle_x &&
            state->ball_y < paddle_y + PADDLE_HEIGHT &&
@@ -153,6 +156,18 @@ void handle_collisions(GameState *state) {
     if (collision_with_y_wall(state)) {
         state->ball_y = clamp(state->ball_y, 0, WINDOW_HEIGHT - BALL_SIZE);
         state->ball_velocity_y = -state->ball_velocity_y;
+    }
+
+    for (int i = 0; i < 2; i++) {
+        if (collision_with_paddle(state, i)) {
+            state->ball_velocity_x = -state->ball_velocity_x;
+
+            // add some vertical velocity based on where the ball hit the paddle
+            int paddle_center = state->paddle_y[i] + PADDLE_HEIGHT / 2;
+            int ball_center = state->ball_y + BALL_SIZE / 2;
+            int offset = ball_center - paddle_center;
+            state->ball_velocity_y = offset / (PADDLE_HEIGHT / 2) * BALL_SPEED_Y;
+        }
     }
 }
 
